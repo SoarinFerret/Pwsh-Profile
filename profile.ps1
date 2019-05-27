@@ -3,48 +3,51 @@
 #
 #
 #    Changelog:
-#        11/04/18 - Added alias for Get-Command as gcmd
+#        19/05/26 - Added ability to use profile in remote sessions
+#                   Change changelog date format from MM/DD/YY to YY/MM/DD
+#                   Update prompt to reflect remoting protocols
+#        18/11/04 - Added alias for Get-Command as gcmd
 #                   Update References to ProfilePath
-#        09/15/18 - Updated prompt support for PowerShell Core
-#        03/23/18 - Added Prompt customizations
+#        18/09/15 - Updated prompt support for PowerShell Core
+#        18/03/23 - Added Prompt customizations
 #                   Added Persistent history
-#        03/17/18 - Added New-Key
+#        18/03/17 - Added New-Key
 #                   Moved Credential import to function instead of execution
 #                   Added local option for Update-Profile
 #                   Invoke-Bsod
-#        02/26/18 - Added Enable-RDP. Changed 'where' to 'Where-Object' in some functions
-#        02/09/18 - Fixed Connect-ExchangeOnline bug
-#        01/24/18 - Fixed Version bug. Added a Set-Location at the end.
-#        12/31/17 - Added Hosts File Section which includes:
+#        18/02/26 - Added Enable-RDP. Changed 'where' to 'Where-Object' in some functions
+#        18/02/09 - Fixed Connect-ExchangeOnline bug
+#        18/01/24 - Fixed Version bug. Added a Set-Location at the end.
+#        17/12/31 - Added Hosts File Section which includes:
 #                   Search-HostsFile
 #                   Add-HostsFile
 #                   Open-HostsFile
-#        12/28/17 - PowerShell Core support for Get-XKCDPassword
+#        17/12/28 - PowerShell Core support for Get-XKCDPassword
 #                   Removed unnecessary Cim call in Get-ComputerUptime
-#        12/11/17 - PowerShell Core Support for Get-Goat
-#        12/09/17 - PowerShell Core Support for Initial Setup
+#        17/12/11 - PowerShell Core Support for Get-Goat
+#        17/12/09 - PowerShell Core Support for Initial Setup
 #                   Automated third version number based changelog
-#        12/07/17 - Speed Optimization. Centralized Aliases Section
-#        12/06/17 - Permanently moved to GitHub
+#        17/12/07 - Speed Optimization. Centralized Aliases Section
+#        17/12/06 - Permanently moved to GitHub
 #                   Added alias for grep, moved content, removed PSCX
-#        12/03/17 - Overhaul of Connect-ExchangeOnline. Now checks for Modern Authentication
-#        12/02/17 - Added Connect-SecurityAndComplianceCenter
-#        10/22/17 - Added Resources Section which includes:
+#        17/12/03 - Overhaul of Connect-ExchangeOnline. Now checks for Modern Authentication
+#        17/12/02 - Added Connect-SecurityAndComplianceCenter
+#        17/10/22 - Added Resources Section which includes:
 #                    Get-ComputerUtilization
 #                    Get-ComputerCpuUtilization
 #                    Get-ComputerMemoryUtilization
 #                    Get-ComputerUptime
-#        09/15/17 - Added Add-CredentialToCsv & changed credential handling in functions
-#        09/14/17 - Added credential import from CSV
+#        17/09/15 - Added Add-CredentialToCsv & changed credential handling in functions
+#        17/09/14 - Added credential import from CSV
 #                   Changed default module location to $ProfilePath\CstmModules
 #                   Added Invoke-TextToSpeech
-#        09/04/17 - Added Send-WakeOnLan
-#        08/28/17 - Added Get-WindowsInstaller
-#        08/03/17 - Added Resources section
-#        07/19/17 - Added Get-HyperVHost
-#        07/14/17 - Added Get-ExternalIPAddress
-#        06/28/17 - Added Update-Profile for easy profile management & added cleanup
-#        06/26/17 - v1 overhaul:
+#        17/09/04 - Added Send-WakeOnLan
+#        17/08/28 - Added Get-WindowsInstaller
+#        17/08/03 - Added Resources section
+#        17/07/19 - Added Get-HyperVHost
+#        17/07/14 - Added Get-ExternalIPAddress
+#        17/06/28 - Added Update-Profile for easy profile management & added cleanup
+#        17/06/26 - v1 overhaul:
 #                    $secret now brought in as secure string
 #                    checks for existing profileKey even if not in default path
 #                    new module handling
@@ -58,12 +61,17 @@
 Param(
     [Parameter(Position=0)]
     [string]$ProfilePath = $(Split-Path -Path $profile.CurrentUserAllHosts),
+    [Parameter(Position=1)]
+    [bool]$Remote = $false,
     [switch]$Version,
     [switch]$Update,
     [string]$hashedKey = "17849254117232230311251061602172192521711073196135452308324153250156321261542172814449"
 )
 $ProgressPreference='SilentlyContinue'
-$PSProfileVersion = "1.3." + ((Get-Content $script:MyInvocation.MyCommand.Path | Select-String "/")[0].ToString().Split('-')[0] -replace '\D+(\d+)','$1')
+$PSProfileVersion = "Remote"
+if(!$Remote){
+    $PSProfileVersion = "1.3." + ((Get-Content $script:MyInvocation.MyCommand.Path | Select-String "/")[0].ToString().Split('-')[0] -replace '\D+(\d+)','$1')
+}
 
 #Print Profile Version & Exit
 if ($Version.IsPresent) {
@@ -84,9 +92,11 @@ $profileKey = $null
 if ((Get-Command Set-PSReadlineOption -ErrorAction SilentlyContinue)) {Set-PSReadlineOption -BellStyle None}
 
 # Persistent History
-$HistoryFilePath = Join-Path $home .ps_history
-Register-EngineEvent PowerShell.Exiting -Action { Get-History | Export-Clixml $HistoryFilePath } | out-null
-if (Test-path $HistoryFilePath) { Import-Clixml $HistoryFilePath | Add-History }
+if(!$Remote){
+    $HistoryFilePath = Join-Path $home .ps_history
+    Register-EngineEvent PowerShell.Exiting -Action { Get-History | Export-Clixml $HistoryFilePath } | out-null
+    if (Test-path $HistoryFilePath) { Import-Clixml $HistoryFilePath | Add-History }
+}
 
 # Customize my prompt
 function Prompt{
@@ -95,17 +105,25 @@ function Prompt{
 
     # whoami
     Write-Host "`n[" -NoNewline
+    # Print elevation status
+    if($PSSenderInfo.ConnectionString -like "*wsman*"){
+        Write-Host "(Remote-WSMan) " -ForegroundColor Red -NoNewline
+    }
+    elseif($PSSenderInfo){
+        Write-Host "(Remote-SSH) " -ForegroundColor Red -NoNewline
+    }
+    elseif(([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")){
+        Write-Host "(Elevated) " -ForegroundColor Red -NoNewline
+    }
     Write-Host "$(whoami)" -NoNewline -ForegroundColor Green
-
-    if($PSVersionTable.OS -like "Darwin*"){ Write-Host "@$(scutil --get LocalHostName)]: " -NoNewline }
-    else { Write-Host "@$(hostname)]: " -NoNewline }
+    Write-Host "]: " -NoNewline
 
     # Print current working directory
     Write-Host "$($(Get-Location).Path -replace ($home).Replace('\','\\'), "~")\".Replace('\\','\').Replace("Microsoft.PowerShell.Core\FileSystem::",'\') -ForegroundColor DarkGray
 
-    # Print elevation status
-    if(([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")){
-        Write-Host "(Elevated) " -ForegroundColor Red -NoNewline
+    if(!$PSSenderInfo){
+        if($PSVersionTable.OS -like "Darwin*"){ Write-Host "[$(scutil --get LocalHostName)]: " -NoNewline }
+        else { Write-Host "[$(hostname)]: " -NoNewline }
     }
 
     # Set exitcode to its former glory
@@ -176,8 +194,9 @@ function Get-ProfileVersion { invoke-expression "$ProfilePath\profile.ps1 -Versi
 
 # why goat farming is better than IT
 Function Get-Goat {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $URI = "http://www.heldeus.nl/goat/GoatFarming.html"
-    $HTML = Invoke-WebRequest -Uri $URI
+    $HTML = Invoke-WebRequest -Uri $URI -UseBasicParsing
     Write-Host "Why Goatfarming is better than IT: " -NoNewline
     $response = ($HTML.Content.Remove(0,67) -split('<p class="goat">') |  Get-Random).TrimStart()
     $response.Substring(0,$response.indexof('</p>'))
@@ -334,6 +353,38 @@ function Enable-RemoteDesktop {
     Invoke-Command @credhash -ScriptBlock{
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0;
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    }
+}
+
+function Enter-EnhancedPSSession{
+    Param(
+        [Parameter(Position=0,Mandatory=$true,ParameterSetName="WSMAN")]
+        [String]$ComputerName,
+        [Parameter(Mandatory=$true,ParameterSetName="SSH")]
+        [String]$Hostname,
+        [Parameter(Position=1,ParameterSetName="WSMAN")]
+        [pscredential]$Credential,
+        [Parameter(Position=1,ParameterSetName="SSH")]
+        [String]$username,
+        [Parameter(Position=3)]
+        [String]$ProfilePath = $profile.CurrentUserAllHosts
+    )
+    if($PSCmdlet.ParameterSetName -eq "WSMAN"){
+        if ($Credential){
+            $PSDefaultParameterValues = $PSDefaultParameterValues.clone()
+            $PSDefaultParameterValues['*:Credential'] = $Credential
+        }
+        $session = New-PSSession $ComputerName
+    }else{
+        if($username){
+            $session = New-PSSession -Hostname $Hostname -Username $username
+        }else{
+            $session = New-PSSession -Hostname $Hostname
+        }
+    }
+    if($session){
+        Invoke-Command -Session $session -FilePath $ProfilePath -ArgumentList "",$true
+        Enter-PSSession $session
     }
 }
 
@@ -695,6 +746,7 @@ profileSetAlias Check-WindowsInstaller Get-WindowsInstaller
 profileSetAlias Send-WOL Send-WakeOnLan
 profileSetAlias gxp Get-XKCDPassword
 profileSetAlias Enable-RDP Enable-RemoteDesktop
+profileSetAlias eps Enter-EnhancedPSSession
 
 # O365 Modern Auth
 profileSetAlias Connect-Exo Connect-ExchangeOnline
@@ -718,7 +770,7 @@ profileSetAlias top Get-ComputerUtilization
 if(Test-Path "$ProfilePath\key"){ $profileKey = Get-Content "$ProfilePath\key" }
 
 #if not ran in correct directory, get user input about stuff
-if($(Split-Path $script:MyInvocation.MyCommand.Path) -ne $ProfilePath){
+if(!$Remote -and $(Split-Path $script:MyInvocation.MyCommand.Path) -ne $ProfilePath){
     $response = Read-Host "'$($MyInvocation.MyCommand)' was not run from its default location.`nWould you like to copy it there? This action will overwrite any previously created profile. (Y/N) "
     if($response -like "y*"){
         #create path if non-existent, otherwise copy item
@@ -742,10 +794,12 @@ if($(Split-Path $script:MyInvocation.MyCommand.Path) -ne $ProfilePath){
 if($Update){ profileGetModules; profileUpdateCustomModules }
 
 # Import credentials
-Import-PSCredentialCsv
+if(!$Remote){
+    Import-PSCredentialCsv
+}
 
 # Import custom modules
-if(test-path $ProfilePath\CstmModules){
+if(!$Remote -and (test-path $ProfilePath\CstmModules)){
     Get-ChildItem "$ProfilePath\CstmModules" | ForEach-Object{ Import-Module $_.FullName -Force -WarningAction SilentlyContinue }
 }
 
