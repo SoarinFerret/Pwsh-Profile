@@ -3,6 +3,7 @@
 #
 #
 #    Changelog:
+#        19/06/07 - Added Use-SelfSignedCerts function
 #        19/05/26 - Added ability to use profile in remote sessions
 #                   Change changelog date format from MM/DD/YY to YY/MM/DD
 #                   Update prompt to reflect remoting protocols
@@ -353,6 +354,28 @@ function Enable-RemoteDesktop {
     Invoke-Command @credhash -ScriptBlock{
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0;
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    }
+}
+
+# credit where credit is due: https://raw.githubusercontent.com/wazuh/wazuh-api/3.9/examples/api-register-agent.ps1
+function Use-SelfSignedCerts {
+    if($PSEdition -ne "Core"){
+        add-type @"
+            using System.Net;
+            using System.Security.Cryptography.X509Certificates;
+            public class PolicyCert : ICertificatePolicy {
+                public PolicyCert() {}
+                public bool CheckValidationResult(
+                    ServicePoint sPoint, X509Certificate cert,
+                    WebRequest wRequest, int certProb) {
+                    return true;
+                }
+            }
+"@
+    [System.Net.ServicePointManager]::CertificatePolicy = New-Object PolicyCert
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+    }else{
+        Write-Warning -Message "Function not supported in PSCore. Just use the '-SkipCertificateCheck' flag"
     }
 }
 
@@ -747,6 +770,7 @@ profileSetAlias Send-WOL Send-WakeOnLan
 profileSetAlias gxp Get-XKCDPassword
 profileSetAlias Enable-RDP Enable-RemoteDesktop
 profileSetAlias eps Enter-EnhancedPSSession
+profileSetAlias Ignore-SelfSignedCerts Use-SelfSignedCerts
 
 # O365 Modern Auth
 profileSetAlias Connect-Exo Connect-ExchangeOnline
