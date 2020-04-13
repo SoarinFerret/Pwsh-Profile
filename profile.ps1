@@ -3,8 +3,13 @@
 #
 #
 #    Changelog:
+#        20/04/11 - Begin redesign 
+#                    remove legacy items
+#                    move some code into separate module
+#                    update prompt
+#                    remove persistent history
 #        19/06/07 - Added Use-SelfSignedCerts function
-                    Get-Goat updates
+#                   Get-Goat updates
 #        19/05/26 - Added ability to use profile in remote sessions
 #                   Change changelog date format from MM/DD/YY to YY/MM/DD
 #                   Update prompt to reflect remoting protocols
@@ -72,7 +77,7 @@ Param(
 $ProgressPreference='SilentlyContinue'
 $PSProfileVersion = "Remote"
 if(!$Remote){
-    $PSProfileVersion = "1.3." + ((Get-Content $script:MyInvocation.MyCommand.Path | Select-String "/")[0].ToString().Split('-')[0] -replace '\D+(\d+)','$1')
+    $PSProfileVersion = "1.4." + ((Get-Content $script:MyInvocation.MyCommand.Path | Select-String "/")[0].ToString().Split('-')[0] -replace '\D+(\d+)','$1')
 }
 
 #Print Profile Version & Exit
@@ -93,13 +98,6 @@ $profileKey = $null
 # Disable annoying beep on backspace
 if ((Get-Command Set-PSReadlineOption -ErrorAction SilentlyContinue)) {Set-PSReadlineOption -BellStyle None}
 
-# Persistent History
-if(!$Remote){
-    $HistoryFilePath = Join-Path $home .ps_history
-    Register-EngineEvent PowerShell.Exiting -Action { Get-History | Export-Clixml $HistoryFilePath } | out-null
-    if (Test-path $HistoryFilePath) { Import-Clixml $HistoryFilePath | Add-History }
-}
-
 # Customize my prompt
 function Prompt{
     # Cache value so we can set it back later
@@ -107,22 +105,27 @@ function Prompt{
 
     # whoami
     Write-Host "`n[" -NoNewline
-    # Print elevation status
+    # Print elevation/remote status
     if($PSSenderInfo.ConnectionString -like "*wsman*"){
         Write-Host "(Remote-WSMan) " -ForegroundColor Red -NoNewline
     }
     elseif($PSSenderInfo){
         Write-Host "(Remote-SSH) " -ForegroundColor Red -NoNewline
     }
-    elseif(([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")){
+    elseif( ( $PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.OS -like "*Windows*" ) -and ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")){
         Write-Host "(Elevated) " -ForegroundColor Red -NoNewline
     }
     Write-Host "$(whoami)" -NoNewline -ForegroundColor Green
     Write-Host "]: " -NoNewline
 
     # Print current working directory
-    Write-Host "$($(Get-Location).Path -replace ($home).Replace('\','\\'), "~")\".Replace('\\','\').Replace("Microsoft.PowerShell.Core\FileSystem::",'\') -ForegroundColor DarkGray
+    if($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.OS -like "*Windows*"){
+        Write-Host "$($(Get-Location).Path -replace ($home).Replace('\','\\'), "~")\".Replace('\\','\').Replace("Microsoft.PowerShell.Core\FileSystem::",'\') -ForegroundColor DarkGray
+    }else{
+        Write-Host "$($(Get-Location).Path -replace ($home).Replace('\','\\'), "~")/".Replace('//','/').Replace("Microsoft.PowerShell.Core\FileSystem::",'/') -ForegroundColor DarkGray
+    }
 
+    # if not remote session, print hostname
     if(!$PSSenderInfo){
         if($PSVersionTable.OS -like "Darwin*"){ Write-Host "[$(scutil --get LocalHostName)]: " -NoNewline }
         else { Write-Host "[$(hostname)]: " -NoNewline }
@@ -142,7 +145,7 @@ function Prompt{
 #############################################################################################################
 
 # Get-Time
-function Get-Time {  return $(get-date | ForEach-Object { $_.ToLongTimeString() } ) }
+function Get-Time {  return $(Get-Date).ToLongTimeString() }
 
 # Get-HyperVHost
 Function Get-HyperVHost {
