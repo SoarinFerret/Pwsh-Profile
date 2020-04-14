@@ -3,9 +3,9 @@
 #
 #
 #    Changelog:
-#        20/04/11 - v2 - Begin redesign 
+#        20/04/13 - v2 - Begin redesign 
 #                    remove legacy items
-#                    move some code into separate module
+#                    move some code into separate modules
 #                    update prompt
 #                    remove persistent history
 #        19/06/07 - Added Use-SelfSignedCerts function
@@ -67,7 +67,7 @@
 [CmdletBinding()]
 Param(
     [Parameter(Position=0)]
-    [string]$ProfilePath = $(Split-Path -Path $profile.CurrentUserAllHosts),
+    [string]$ProfilePath = $profile.CurrentUserAllHosts,
     [Parameter(Position=1)]
     [bool]$Remote = $false,
     [switch]$Version,
@@ -225,7 +225,7 @@ Function Get-ExternalIPAddress{
 # TODO: add more options
 function Get-XKCDPassword {
     Param(
-        [String]$Path = "$ProfilePath\dictionary.txt",
+        [String]$Path = "$(split-path $profile.CurrentUserAllHosts)\dictionary.txt",
         [String]$Uri = "https://raw.githubusercontent.com/SoarinFerret/Pwsh-Profile/master/dictionary.txt",
         [Int32]$Count = 3,
         [switch]$UpdateDictionary
@@ -321,8 +321,8 @@ function profileSetAlias{
         [parameter(Position=0)][String]$Alias,
         [parameter(Position=1)][String]$Command
     )
-    if(!(Get-alias $Alias -ErrorAction SilentlyContinue) -and `     # check alias doesn't exist
-        !(Get-Command $alias -ErrorAction SilentlyContinue) -and `  # check alias isn't already a command
+    if( !(Get-Command $alias -ErrorAction SilentlyContinue) -and `  # check alias isn't already a command
+        !(Get-alias $Alias -ErrorAction SilentlyContinue) -and `    # check alias doesn't exist
          (Get-Command $Command -ErrorAction SilentlyContinue)       # check command exists
       ){ 
         new-Alias $Alias $Command -Scope 1
@@ -332,23 +332,17 @@ function profileSetAlias{
 # Standard Cmdlets
 profileSetAlias touch New-Item
 profileSetAlias grep Select-String
-profileSetAlias Shutdown-Computer Stop-Computer #because it makes more sense
 
 # PS Core Aliases
 profileSetAlias wget Invoke-WebRequest
 profileSetAlias ls Get-ChildItem
 
-# Hyper-V specific
-profileSetAlias Shutdown-VM Stop-VM
-
 # Active Directory specific
 profileSetAlias Reset-ADAccountPassword Set-ADAccountPassword #because I cant remember this for some reason
 
 # Useful / Fun Cstm Functions
-profileSetAlias gt Get-Time
 profileSetAlias gg Get-Goat
 profileSetAlias geip Get-ExternalIPAddress
-profileSetAlias gxp Get-XKCDPassword
 profileSetAlias eps Enter-PSSession
 profileSetAlias eeps Enter-EnhancedPSSession
 profileSetAlias Ignore-SelfSignedCerts Use-SelfSignedCerts
@@ -361,23 +355,18 @@ profileSetAlias gh Set-LocationToHome
 #############################################################################################################
 
 #if not ran in correct directory, get user input about stuff
-if(!$Remote -and $(Split-Path $script:MyInvocation.MyCommand.Path) -ne $ProfilePath){
-    $response = Read-Host "'$($MyInvocation.MyCommand)' was not run from its default location.`nWould you like to copy it there? This action will overwrite any previously created profile. (Y/N) "
+if(!$Remote -and $script:MyInvocation.MyCommand.Path -ne $ProfilePath){
+    $response = Read-Host "'$($MyInvocation.MyCommand)' was not run from its default location.`nWould you like to copy it there? This action will overwrite any previously created profile. (y/N) "
     if($response -like "y*"){
         #create path if non-existent, otherwise copy item
-        if(!(test-path $ProfilePath)){New-Item -Path $ProfilePath -ItemType Directory -Force}
-        Copy-Item ".\$($MyInvocation.MyCommand)" -Destination "$ProfilePath\profile.ps1" -Force
+        if(!(test-path $(Split-Path $ProfilePath))){New-Item -Path $(Split-Path $ProfilePath) -ItemType Directory -Force}
+        Copy-Item ".\$($MyInvocation.MyCommand)" -Destination $ProfilePath -Force
     }
     else { $ProfilePath = (Get-Location).Path }
-}
-
-# Import custom modules
-if(!$Remote -and (test-path $ProfilePath\CstmModules)){
-    Get-ChildItem "$ProfilePath\CstmModules" | ForEach-Object{ Import-Module $_.FullName -Force -WarningAction SilentlyContinue }
 }
 
 $ProgressPreference='Continue'
 
 # Clean up items
 Remove-Item -Path Function:\profile*
-Remove-Variable Update,Version
+Remove-Variable Update,Version,ProfilePath
