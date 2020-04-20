@@ -3,6 +3,7 @@
 #
 #
 #    Changelog:
+#        20/04/19 - Update Add-PrivateRepo to use Tls12
 #        20/04/13 - v2 - Begin redesign 
 #                    remove legacy items
 #                    move some code into separate modules
@@ -148,7 +149,7 @@ function Add-PrivateRepo {
         $SourceLocation = "https://packages.kanto.cloud/repository/PowerShell/",
         $PublishLocation = "https://packages.kanto.cloud/repository/PowerShell/"
     )
-
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Register-PSRepository -Name $Name `
                           -SourceLocation $SourceLocation `
                           -PublishLocation $PublishLocation `
