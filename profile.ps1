@@ -3,6 +3,7 @@
 #
 #
 #    Changelog:
+#        20/05/08 - Add Convert-HelpToMarkdown
 #        20/04/19 - Update Add-PrivateRepo to use Tls12
 #        20/04/13 - v2 - Begin redesign 
 #                    remove legacy items
@@ -309,6 +310,71 @@ function Enter-EnhancedPSSession{
 
 function Set-LocationToHome{
     Set-Location ~/
+}
+
+# based on the original work provided here: https://gist.github.com/urasandesu/51e7d31b9fa3e53489a7
+function Convert-HelpToMarkdown {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $True)]
+        $Name
+    )
+    
+    try {
+        $full = Get-Help $Name -Full
+    
+@"
+# $(($full.name | Out-String).Replace($pwd.path,"."))
+## SYNOPSIS
+$($full.Synopsis)
+
+## SYNTAX
+``````powershell
+$((($full.syntax | Out-String).Replace($pwd.path,".") -replace "`r`n", "`r`n`r`n").Trim())
+``````
+
+## DESCRIPTION
+$(($full.description | Out-String).Trim())
+
+## PARAMETERS
+"@ + $(foreach ($parameter in $full.parameters.parameter) {
+@"
+
+### -$($parameter.name) &lt;$($parameter.type.name)&gt;
+$(($parameter.description | Out-String).Trim())
+``````
+$(((($parameter | Out-String).Trim() -split "`r`n")[-5..-1] | % { $_.Trim() }) -join "`r`n")
+``````
+
+"@
+}) + @"
+
+## EXAMPLES
+"@ + $(foreach ($example in $full.examples.example) {
+@"
+    
+### $(($example.title -replace '-*', '').Trim())
+``````powershell
+$($example.code)
+``````
+$($example.remarks.Text)
+
+## NOTES
+``````
+$(($full.alertSet.alert | Out-String).Trim())
+``````
+
+## INPUTS
+$(if($full.inputTypes.inputType){$full.inputTypes.inputType.type.name})
+
+## OUTPUTS
+$(if($full.returnValues.returnValue){$full.returnValues.returnValue[0].type.name})
+"@
+    })
+    
+    } finally {
+        
+    }
 }
 
 #############################################################################################################
